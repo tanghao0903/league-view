@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#360046">
+<title>学术军备竞赛（冷战版）</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="favicon.svg">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">A</div>
+    <div>
+      <div class="brand-title" id="brand-title">学术军备竞赛（冷战版）</div>
+      <div class="brand-sub"><span id="brand-en">COLD WAR EDITION</span> · 只读看板<span class="ro-badge">更新于 <span id="published-at">—</span></span> <span id="mode-badge" class="mode-badge" hidden></span></div>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <a href="#/board" data-tab="board">积分榜</a>
+    <a href="#/summary" data-tab="summary">积分明细</a>
+    <a href="#/poster" data-tab="poster">学科比分</a>
+  </nav>
+</header>
+<main id="view" class="view"><p class="muted">正在加载…</p></main>
+<div id="modal-root"></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script>window.LEAGUE_READONLY = true;</script>
+<script src="poster.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,456 @@
+/* 独立 Canvas 海报绘制器：输入统一的领域结果，页面预览与 JPG 导出共用同一张画布。 */
+(function () {
+  "use strict";
+
+  const FONT = '"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","WenQuanYi Zen Hei",sans-serif';
+  const W = 1080;
+  const C = {
+    purple: "#360046",
+    light: "#fbfafc",
+    muted: "#7a7287",
+    line: "#e3dde9",
+    lime: "#ceff48",
+    darkA: "#241a2f",
+    darkB: "#17161c",
+    avatarBg: ["#e4e2f7", "#e6f2d2"],
+    avatarInk: ["#2e2a80", "#3c5200"],
+  };
+
+  function font(size, weight) {
+    return `${weight || 400} ${size}px ${FONT}`;
+  }
+
+  function setSpacing(ctx, px) {
+    if ("letterSpacing" in ctx) ctx.letterSpacing = px + "px";
+  }
+
+  /* 缩小字号直到放得下；返回字号 */
+  function fitSize(ctx, text, maxW, start, min, weight) {
+    let size = start;
+    while (size > min) {
+      ctx.font = font(size, weight);
+      if (ctx.measureText(text).width <= maxW) return size;
+      size -= 2;
+    }
+    ctx.font = font(min, weight);
+    return min;
+  }
+
+  /* 按字符换行（中文友好），不截断 */
+  function wrap(ctx, text, maxW) {
+    const lines = [];
+    let cur = "";
+    for (const ch of Array.from(text)) {
+      const next = cur + ch;
+      if (cur && ctx.measureText(next).width > maxW) {
+        lines.push(cur);
+        cur = ch;
+      } else {
+        cur = next;
+      }
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  /* 行数不变的前提下尽量让各行等长 */
+  function balancedWrap(ctx, text, maxW) {
+    const lines = wrap(ctx, text, maxW);
+    let w = maxW;
+    let best = lines;
+    while (w > 40) {
+      w -= 4;
+      const trial = wrap(ctx, text, w);
+      if (trial.length > lines.length) break;
+      best = trial;
+    }
+    return best;
+  }
+
+  /* 名字：先缩字号，仍放不下则在给定高度内换行，不截字 */
+  function drawName(ctx, text, x, cy, maxW, align, color, start, maxH) {
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    const size = fitSize(ctx, text, maxW, start, 24, 700);
+    ctx.font = font(size, 700);
+    if (ctx.measureText(text).width <= maxW) {
+      ctx.fillText(text, x, cy);
+      return;
+    }
+    const limit = maxH || 120;
+    let lines = [];
+    let sz = 26;
+    for (; sz >= 16; sz -= 2) {
+      ctx.font = font(sz, 700);
+      lines = balancedWrap(ctx, text, maxW);
+      if (lines.length * sz * 1.18 <= limit) break;
+    }
+    const lh = sz * 1.18;
+    const top = cy - ((lines.length - 1) * lh) / 2;
+    lines.forEach((ln, i) => ctx.fillText(ln, x, top + i * lh));
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawAvatar(ctx, p, idx, x, y, size, dark) {
+    ctx.save();
+    roundRect(ctx, x, y, size, size, size * 0.22);
+    ctx.clip();
+    if (p.image) {
+      const img = p.image;
+      const s = Math.min(img.naturalWidth, img.naturalHeight);
+      ctx.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, x, y, size, size);
+    } else {
+      ctx.fillStyle = dark ? "#3a3342" : C.avatarBg[idx];
+      ctx.fillRect(x, y, size, size);
+      ctx.fillStyle = dark ? "#ffffff" : C.avatarInk[idx];
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = font(Math.round(size * 0.46), 800);
+      ctx.fillText(initial(p.nickname, idx), x + size / 2, y + size / 2 + 1);
+    }
+    ctx.restore();
+  }
+
+  function initial(name, idx) {
+    const s = String(name || "").trim();
+    if (!s) return idx === 0 ? "A" : "B";
+    const m = s.match(/[A-Za-z0-9]/);
+    // 形如“用户A”取字母；中文名取第一个字
+    if (/^用户/.test(s) && m) return m[0].toUpperCase();
+    return Array.from(s)[0].toUpperCase();
+  }
+
+  function loadImages(participants) {
+    return Promise.all(participants.map((p) => new Promise((resolve) => {
+      if (!p.avatar) return resolve(Object.assign({}, p, { image: null }));
+      const img = new Image();
+      img.onload = () => resolve(Object.assign({}, p, { image: img }));
+      img.onerror = () => resolve(Object.assign({}, p, { image: null }));
+      img.src = p.avatar;
+    })));
+  }
+
+  async function ready() {
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch (e) { /* 忽略 */ }
+    }
+  }
+
+  function cellText(cell) {
+    if (!cell || cell.status === "pending") return "—";
+    if (cell.status === "absent") return "缺考";
+    return cell.value;
+  }
+
+  /* ---------- 学科比分海报（参考图一：浅底、深紫标题与比分块） ---------- */
+  async function drawScorePoster(canvas, d) {
+    await ready();
+    const people = await loadImages(d.participants);
+    const pad = 96;
+    const inner = W - pad * 2;
+    const rows = d.rows;
+    const rowH = 214;
+    const headH = 360;
+    const footH = 190;
+    const H = Math.max(rows.length > 1 ? 1350 : 0, headH + 20 + rows.length * rowH + footH);
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    ctx.fillStyle = C.light;
+    ctx.fillRect(0, 0, W, H);
+
+    // 顶部
+    let y = 92;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.purple;
+    ctx.font = font(22, 800);
+    setSpacing(ctx, 6);
+    ctx.fillText(d.kicker, pad, y);
+    setSpacing(ctx, 0);
+
+    y += 118;
+    const tSize = fitSize(ctx, d.title, inner, 108, 56, 900);
+    ctx.font = font(tSize, 900);
+    ctx.fillText(d.title, pad, y);
+
+    y += 34;
+    ctx.font = font(28, 700);
+    const tagW = ctx.measureText(d.tag).width + 52;
+    ctx.fillStyle = C.purple;
+    roundRect(ctx, pad, y, tagW, 58, 12);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(d.tag, pad + 26, y + 30);
+    if (d.multiplierBadge) {
+      ctx.font = font(28, 800);
+      const bw = ctx.measureText(d.multiplierBadge).width + 40;
+      ctx.fillStyle = C.lime;
+      roundRect(ctx, pad + tagW + 14, y, bw, 58, 12);
+      ctx.fill();
+      ctx.fillStyle = "#1d2600";
+      ctx.fillText(d.multiplierBadge, pad + tagW + 34, y + 30);
+    }
+
+    y += 100;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.muted;
+    ctx.font = font(26, 400);
+    ctx.fillText(d.metaLine, pad, y);
+
+    // 统一比分块宽度，保证四行对齐
+    ctx.font = font(64, 800);
+    let boxW = 250;
+    rows.forEach((r) => {
+      const t = `${cellText(r.cells[0])} : ${cellText(r.cells[1])}`;
+      boxW = Math.max(boxW, ctx.measureText(t).width + 72);
+    });
+    const cx = W / 2;
+    const avatarSize = 72;
+    const gapA = 26;
+    const nameGap = 20;
+
+    y = headH + 20;
+    rows.forEach((r) => {
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pad, y);
+      ctx.lineTo(W - pad, y);
+      ctx.stroke();
+
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "left";
+      ctx.fillStyle = C.purple;
+      ctx.font = font(30, 800);
+      ctx.fillText(r.subject, pad, y + 54);
+      ctx.textAlign = "right";
+      ctx.fillStyle = C.muted;
+      ctx.font = font(22, 400);
+      ctx.fillText(r.meta, W - pad, y + 52);
+
+      const midY = y + 124;
+      const boxH = 92;
+      const bx = cx - boxW / 2;
+      ctx.fillStyle = C.purple;
+      roundRect(ctx, bx, midY - boxH / 2, boxW, boxH, 14);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const scoreText = `${cellText(r.cells[0])} : ${cellText(r.cells[1])}`;
+      ctx.font = font(fitSize(ctx, scoreText, boxW - 40, 64, 36, 800), 800);
+      ctx.fillText(scoreText, cx, midY + 3);
+      ctx.fillStyle = C.muted;
+      ctx.font = font(20, 400);
+      ctx.fillText(r.caption, cx, midY + boxH / 2 + 22);
+
+      const ax = bx - gapA - avatarSize;
+      const bx2 = bx + boxW + gapA;
+      drawAvatar(ctx, people[0], 0, ax, midY - avatarSize / 2, avatarSize, false);
+      drawAvatar(ctx, people[1], 1, bx2, midY - avatarSize / 2, avatarSize, false);
+      const nameMax = ax - nameGap - pad;
+      drawName(ctx, people[0].nickname, ax - nameGap, midY, nameMax, "right", C.purple, 34, 100);
+      drawName(ctx, people[1].nickname, bx2 + avatarSize + nameGap, midY, nameMax, "left", C.purple, 34, 100);
+
+      y += rowH;
+    });
+
+    // 页脚
+    const fy = H - footH + 30;
+    ctx.fillStyle = C.lime;
+    roundRect(ctx, pad, fy, inner, 84, 18);
+    ctx.fill();
+    ctx.fillStyle = "#1d2600";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.font = font(26, 800);
+    ctx.fillText(d.projectTitle, pad + 30, fy + 43);
+    ctx.textAlign = "right";
+    ctx.font = font(24, 700);
+    ctx.fillText(d.slogan, W - pad - 30, fy + 43);
+    ctx.fillStyle = C.muted;
+    ctx.textAlign = "center";
+    ctx.font = font(20, 400);
+    ctx.fillText(d.footnote, W / 2, fy + 130);
+    return canvas;
+  }
+
+  /* ---------- 用户积分榜（参考图二：深底、荧光绿细边框） ---------- */
+  async function drawBoardPoster(canvas, d) {
+    await ready();
+    const people = await loadImages(d.participants);
+    const byId = {};
+    people.forEach((p, i) => { byId[p.id] = { p, idx: i }; });
+    const pad = 80;
+    const inner = W - pad * 2;
+    const H = 1350;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, C.darkA);
+    g.addColorStop(1, C.darkB);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // 抽象背景：细斜线纹理
+    ctx.save();
+    ctx.strokeStyle = "rgba(206,255,72,0.05)";
+    ctx.lineWidth = 2;
+    for (let i = -H; i < W; i += 46) {
+      ctx.beginPath();
+      ctx.moveTo(i, H);
+      ctx.lineTo(i + H * 0.6, 0);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    let y = 96;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.lime;
+    ctx.font = font(22, 800);
+    setSpacing(ctx, 6);
+    ctx.fillText(d.kicker, pad, y);
+    setSpacing(ctx, 0);
+
+    ctx.fillStyle = "#ffffff";
+    y += 104;
+    ctx.font = font(fitSize(ctx, d.title1, inner, 84, 48, 900), 900);
+    ctx.fillText(d.title1, pad, y);
+    y += 104;
+    ctx.font = font(fitSize(ctx, d.title2, inner, 84, 48, 900), 900);
+    ctx.fillText(d.title2, pad, y);
+    y += 56;
+    ctx.fillStyle = "#b9b2c6";
+    ctx.font = font(26, 400);
+    ctx.fillText(d.scopeLine, pad, y);
+
+    y += 84;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = font(30, 800);
+    ctx.fillText(d.sectionTitle, pad, y);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#b9b2c6";
+    ctx.font = font(22, 400);
+    ctx.fillText(`${d.rows.length} 位参赛者`, W - pad, y);
+
+    // 榜单
+    y += 26;
+    const headRow = 72;
+    const rowH = 128;
+    const tableH = headRow + rowH * d.rows.length;
+    ctx.fillStyle = "rgba(255,255,255,0.045)";
+    roundRect(ctx, pad, y, inner, tableH, 28);
+    ctx.fill();
+    ctx.strokeStyle = C.lime;
+    ctx.lineWidth = 2;
+    roundRect(ctx, pad + 1, y + 1, inner - 2, tableH - 2, 28);
+    ctx.stroke();
+
+    const colRank = pad + 64;
+    const colAvatar = pad + 128;
+    const colThis = W - pad - 250;
+    const colCum = W - pad - 44;
+    ctx.fillStyle = "#a9a1b7";
+    ctx.font = font(22, 400);
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.fillText("名次", colRank, y + headRow / 2);
+    ctx.textAlign = "left";
+    ctx.fillText("用户", colAvatar, y + headRow / 2);
+    ctx.textAlign = "right";
+    ctx.fillText(d.thisHeader, colThis, y + headRow / 2);
+    ctx.fillText("累计", colCum, y + headRow / 2);
+
+    let ry = y + headRow;
+    d.rows.forEach((r) => {
+      ctx.strokeStyle = "rgba(255,255,255,0.10)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pad + 2, ry);
+      ctx.lineTo(W - pad - 2, ry);
+      ctx.stroke();
+      const mid = ry + rowH / 2;
+      const info = byId[r.participant_id];
+      ctx.textAlign = "center";
+      ctx.fillStyle = r.rank === 1 ? C.lime : "#a9a1b7";
+      ctx.font = font(46, 300);
+      ctx.fillText(String(r.rank), colRank, mid + (r.tied ? -10 : 2));
+      if (r.tied) {
+        ctx.font = font(18, 700);
+        ctx.fillText("并列", colRank, mid + 34);
+      }
+      drawAvatar(ctx, info.p, info.idx, colAvatar, mid - 34, 68, true);
+      const nameX = colAvatar + 68 + 22;
+      ctx.font = font(36, 800);
+      drawName(ctx, info.p.nickname, nameX, mid, colThis - 120 - nameX, "left", "#ffffff", 36, 104);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#d9d3e2";
+      ctx.font = font(fitSize(ctx, r.thisText, 150, 36, 22, 400), 400);
+      ctx.fillText(r.thisText, colThis, mid + 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = font(fitSize(ctx, r.cumText, 190, 68, 36, 900), 900);
+      ctx.fillText(r.cumText, colCum, mid + 4);
+      ry += rowH;
+    });
+
+    // 下半区
+    let by = y + tableH + 120;
+    const bigW = 460;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.lime;
+    const bigSize = fitSize(ctx, d.bigLabel, bigW, 240, 90, 900);
+    ctx.font = font(bigSize, 900);
+    ctx.fillText(d.bigLabel, W - pad, by + 150);
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#ece4f4";
+    ctx.font = font(52, 900);
+    ctx.fillText("下一次交锋，", pad, by + 20);
+    ctx.fillText("由你改写排名。", pad, by + 88);
+    ctx.fillStyle = "#b9b2c6";
+    ctx.font = font(22, 400);
+    ctx.fillText("常规周测 + 特殊考试", pad, by + 140);
+    ctx.fillText("A / C 各自累计、各自排名，互不相加。", pad, by + 174);
+
+    const fy = H - 110;
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pad, fy);
+    ctx.lineTo(W - pad, fy);
+    ctx.stroke();
+    ctx.fillStyle = "#b9b2c6";
+    ctx.font = font(20, 400);
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillText(d.footLeft, pad, fy + 44);
+    ctx.textAlign = "right";
+    ctx.fillText(d.footRight, W - pad, fy + 44);
+    return canvas;
+  }
+
+  function toJpeg(canvas) {
+    // 画布已整体绘制不透明背景；质量 0.95
+    return canvas.toDataURL("image/jpeg", 0.95);
+  }
+
+  window.Poster = { drawScorePoster, drawBoardPoster, toJpeg, initial,
+    util: { W, C, FONT, font, fitSize, setSpacing, roundRect, drawAvatar, drawName, loadImages, ready } };
+})();
