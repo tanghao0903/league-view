@@ -446,11 +446,380 @@
     return canvas;
   }
 
+  /* ---------- 单场战报（浅底标题 + 深紫对阵块 + 学科明细 + 深色战后积分榜） ---------- */
+  async function drawReportPoster(canvas, d) {
+    await ready();
+    const people = await loadImages(d.participants);
+    const pad = 80;
+    const inner = W - pad * 2;
+    const subjRowH = 104;
+    const vsH = 380;
+    const standRowH = 200;
+    const H = 360 + vsH + 60 + 64 + d.subjects.length * subjRowH + 70 + 90 + standRowH * d.standings.length + 210;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = C.light;
+    ctx.fillRect(0, 0, W, H);
+
+    // 顶部
+    let y = 92;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.purple;
+    ctx.font = font(22, 800);
+    setSpacing(ctx, 6);
+    ctx.fillText(d.kicker, pad, y);
+    setSpacing(ctx, 0);
+    y += 118;
+    ctx.font = font(fitSize(ctx, d.title, inner, 108, 56, 900), 900);
+    ctx.fillText(d.title, pad, y);
+    y += 34;
+    ctx.font = font(28, 700);
+    const tagW = ctx.measureText(d.tag).width + 52;
+    roundRect(ctx, pad, y, tagW, 58, 12);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(d.tag, pad + 26, y + 30);
+    if (d.multiplierBadge) {
+      ctx.font = font(28, 800);
+      const bw = ctx.measureText(d.multiplierBadge).width + 40;
+      ctx.fillStyle = C.lime;
+      roundRect(ctx, pad + tagW + 14, y, bw, 58, 12);
+      ctx.fill();
+      ctx.fillStyle = "#1d2600";
+      ctx.fillText(d.multiplierBadge, pad + tagW + 34, y + 30);
+    }
+    y += 100;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.muted;
+    ctx.font = font(26, 400);
+    ctx.fillText(d.metaLine, pad, y);
+
+    // “比分”两边对齐：左数右对齐、冒号居中、右数左对齐
+    function pair(vals, cx, cy, size, weight, colors, gap) {
+      ctx.textBaseline = "middle";
+      ctx.font = font(size, weight);
+      ctx.textAlign = "center";
+      ctx.fillStyle = colors[2];
+      ctx.fillText(":", cx, cy);
+      ctx.textAlign = "right";
+      ctx.fillStyle = colors[0];
+      ctx.fillText(vals[0], cx - gap, cy);
+      ctx.textAlign = "left";
+      ctx.fillStyle = colors[1];
+      ctx.fillText(vals[1], cx + gap, cy);
+    }
+
+    // 对阵块：本场 A / C 积分
+    y = 360;
+    ctx.fillStyle = C.purple;
+    roundRect(ctx, pad, y, inner, vsH, 28);
+    ctx.fill();
+    const av = 88;
+    drawAvatar(ctx, people[0], 0, pad + 40, y + 40, av, true);
+    drawAvatar(ctx, people[1], 1, W - pad - 40 - av, y + 40, av, true);
+    const nameMax = inner / 2 - 40 - av - 24 - 60;
+    drawName(ctx, people[0].nickname, pad + 40 + av + 22, y + 40 + av / 2, nameMax, "left", "#ffffff", 36, 90);
+    drawName(ctx, people[1].nickname, W - pad - 40 - av - 22, y + 40 + av / 2, nameMax, "right", "#ffffff", 36, 90);
+    ctx.fillStyle = C.lime;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = font(34, 900);
+    ctx.fillText("VS", W / 2, y + 40 + av / 2);
+    const lineY = [y + 196, y + 286];
+    d.thisLines.forEach((ln, i) => {
+      const cy = lineY[i];
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#cfc4dc";
+      ctx.font = font(24, 700);
+      ctx.fillText(ln.label, pad + 40, cy);
+      const hi = (k) => (ln.winner === k ? C.lime : "#ffffff");
+      pair(ln.values, W / 2 + 40, cy + 2, 66, 900, [hi(0), hi(1), "#9d8fb0"], 30);
+      ctx.textAlign = "right";
+      ctx.fillStyle = ln.winner == null ? "#cfc4dc" : C.lime;
+      ctx.font = font(24, 700);
+      ctx.fillText(ln.verdict, W - pad - 40, cy);
+    });
+
+    // 学科明细
+    y += vsH + 60;
+    const colName = pad;
+    const colScore = pad + 380;
+    const colA = pad + 640;
+    const colC = W - pad - 110;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.purple;
+    ctx.font = font(30, 800);
+    ctx.textAlign = "left";
+    ctx.fillText("四科交锋", colName, y + 6);
+    ctx.fillStyle = C.muted;
+    ctx.font = font(22, 400);
+    ctx.textAlign = "center";
+    ctx.fillText("原始分数", colScore, y + 6);
+    ctx.fillText("A 分差", colA, y + 6);
+    ctx.fillText("C 联赛", colC, y + 6);
+    y += 28;
+    d.subjects.forEach((r) => {
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pad, y);
+      ctx.lineTo(W - pad, y);
+      ctx.stroke();
+      const cy = y + subjRowH / 2;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = C.purple;
+      ctx.font = font(32, 800);
+      ctx.fillText(r.name, colName, cy - 14);
+      ctx.fillStyle = C.muted;
+      ctx.font = font(19, 400);
+      ctx.fillText(r.meta, colName, cy + 22);
+      const hi = (k) => (r.winner === k ? C.purple : C.muted);
+      pair([cellText(r.cells[0]), cellText(r.cells[1])], colScore, cy + 2, 44, 800, [hi(0), hi(1), C.muted], 20);
+      pair(r.a, colA, cy + 2, 34, 700, [hi(0), hi(1), C.muted], 16);
+      pair(r.c, colC, cy + 2, 34, 700, [hi(0), hi(1), C.muted], 16);
+      y += subjRowH;
+    });
+    ctx.strokeStyle = C.line;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(W - pad, y);
+    ctx.stroke();
+
+    // 战后积分榜
+    y += 70;
+    const boxH = 90 + standRowH * d.standings.length;
+    const g = ctx.createLinearGradient(0, y, W, y + boxH);
+    g.addColorStop(0, C.darkA);
+    g.addColorStop(1, C.darkB);
+    ctx.fillStyle = g;
+    roundRect(ctx, pad, y, inner, boxH, 28);
+    ctx.fill();
+    ctx.strokeStyle = C.lime;
+    ctx.lineWidth = 2;
+    roundRect(ctx, pad + 1, y + 1, inner - 2, boxH - 2, 28);
+    ctx.stroke();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = font(30, 800);
+    ctx.fillText("战后积分榜", pad + 40, y + 52);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#b9b2c6";
+    ctx.font = font(22, 400);
+    ctx.fillText(d.standingsNote, W - pad - 40, y + 52);
+    let sy = y + 90;
+    d.standings.forEach((st) => {
+      ctx.strokeStyle = "rgba(255,255,255,0.10)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pad + 2, sy);
+      ctx.lineTo(W - pad - 2, sy);
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.fillStyle = C.lime;
+      ctx.font = font(24, 800);
+      ctx.fillText(st.label, pad + 40, sy + 44);
+      const lead = (k) => (st.leader === k ? C.lime : "#ffffff");
+      pair(st.after, W / 2, sy + 104, 72, 900, [lead(0), lead(1), "#6f6680"], 34);
+      ctx.fillStyle = "#b9b2c6";
+      ctx.font = font(22, 400);
+      ctx.textAlign = "right";
+      ctx.fillText(st.delta[0], W / 2 - 34, sy + 156);
+      ctx.textAlign = "left";
+      ctx.fillText(st.delta[1], W / 2 + 34, sy + 156);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#ece4f4";
+      ctx.font = font(fitSize(ctx, st.story, 380, 24, 18, 700), 700);
+      ctx.fillText(st.story, W - pad - 40, sy + 44);
+      sy += standRowH;
+    });
+
+    // 页脚
+    const fy = H - 180;
+    ctx.fillStyle = C.lime;
+    roundRect(ctx, pad, fy, inner, 84, 18);
+    ctx.fill();
+    ctx.fillStyle = "#1d2600";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.font = font(26, 800);
+    ctx.fillText(d.projectTitle, pad + 30, fy + 43);
+    ctx.textAlign = "right";
+    ctx.font = font(24, 700);
+    ctx.fillText(d.slogan, W - pad - 30, fy + 43);
+    ctx.fillStyle = C.muted;
+    ctx.textAlign = "center";
+    ctx.font = font(20, 400);
+    ctx.fillText(d.footnote, W / 2, fy + 130);
+    return canvas;
+  }
+
+  /* ---------- 单科战报：一科一张（大比分 + 本科 A/C 积分 + 战前累计） ---------- */
+  async function drawSubjectPoster(canvas, d) {
+    await ready();
+    const people = await loadImages(d.participants);
+    const pad = 80;
+    const inner = W - pad * 2;
+    const vsH = 400;
+    const cardH = 250;
+    const bandH = 96;
+    const H = 360 + vsH + 40 + cardH + 36 + bandH + 60 + 180;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = C.light;
+    ctx.fillRect(0, 0, W, H);
+
+    let y = 92;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.purple;
+    ctx.font = font(22, 800);
+    setSpacing(ctx, 6);
+    ctx.fillText(d.kicker, pad, y);
+    setSpacing(ctx, 0);
+    y += 118;
+    ctx.font = font(fitSize(ctx, d.title, inner, 108, 56, 900), 900);
+    ctx.fillText(d.title, pad, y);
+    y += 34;
+    ctx.font = font(28, 700);
+    const tagW = ctx.measureText(d.tag).width + 52;
+    roundRect(ctx, pad, y, tagW, 58, 12);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(d.tag, pad + 26, y + 30);
+    if (d.multiplierBadge) {
+      ctx.font = font(28, 800);
+      const bw = ctx.measureText(d.multiplierBadge).width + 40;
+      ctx.fillStyle = C.lime;
+      roundRect(ctx, pad + tagW + 14, y, bw, 58, 12);
+      ctx.fill();
+      ctx.fillStyle = "#1d2600";
+      ctx.fillText(d.multiplierBadge, pad + tagW + 34, y + 30);
+    }
+    y += 100;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.muted;
+    ctx.font = font(26, 400);
+    ctx.fillText(d.metaLine, pad, y);
+
+    // 对阵块：原始分数
+    y = 360;
+    ctx.fillStyle = C.purple;
+    roundRect(ctx, pad, y, inner, vsH, 28);
+    ctx.fill();
+    const av = 88;
+    drawAvatar(ctx, people[0], 0, pad + 40, y + 40, av, true);
+    drawAvatar(ctx, people[1], 1, W - pad - 40 - av, y + 40, av, true);
+    const nameMax = inner / 2 - 40 - av - 24 - 60;
+    drawName(ctx, people[0].nickname, pad + 40 + av + 22, y + 40 + av / 2, nameMax, "left", "#ffffff", 36, 90);
+    drawName(ctx, people[1].nickname, W - pad - 40 - av - 22, y + 40 + av / 2, nameMax, "right", "#ffffff", 36, 90);
+    ctx.fillStyle = C.lime;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = font(34, 900);
+    ctx.fillText("VS", W / 2, y + 40 + av / 2);
+    const cy = y + 238;
+    const hi = (k) => (d.winner === k ? C.lime : "#ffffff");
+    const vals = [cellText(d.cells[0]), cellText(d.cells[1])];
+    ctx.font = font(132, 900);
+    const gap = 44;
+    ctx.fillStyle = "#9d8fb0";
+    ctx.fillText(":", W / 2, cy);
+    ctx.textAlign = "right";
+    ctx.fillStyle = hi(0);
+    ctx.font = font(fitSize(ctx, vals[0], inner / 2 - 80, 132, 60, 900), 900);
+    ctx.fillText(vals[0], W / 2 - gap, cy + 4);
+    ctx.textAlign = "left";
+    ctx.fillStyle = hi(1);
+    ctx.font = font(fitSize(ctx, vals[1], inner / 2 - 80, 132, 60, 900), 900);
+    ctx.fillText(vals[1], W / 2 + gap, cy + 4);
+    ctx.textAlign = "center";
+    ctx.fillStyle = d.winner == null ? "#cfc4dc" : C.lime;
+    ctx.font = font(28, 800);
+    ctx.fillText(d.verdict, W / 2, y + vsH - 52);
+
+    // 本科积分：A / C 两张卡
+    y += vsH + 40;
+    const cardW = (inner - 24) / 2;
+    d.points.forEach((pt, i) => {
+      const x = pad + i * (cardW + 24);
+      ctx.fillStyle = "#ffffff";
+      roundRect(ctx, x, y, cardW, cardH, 24);
+      ctx.fill();
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 2;
+      roundRect(ctx, x + 1, y + 1, cardW - 2, cardH - 2, 24);
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = C.purple;
+      ctx.font = font(26, 800);
+      ctx.fillText(pt.label, x + 32, y + 46);
+      const mid = x + cardW / 2;
+      ctx.font = font(72, 900);
+      ctx.textAlign = "center";
+      ctx.fillStyle = C.muted;
+      ctx.fillText(":", mid, y + 128);
+      const col = (k) => (pt.winner === k ? C.purple : "#b1a9bb");
+      ctx.textAlign = "right";
+      ctx.fillStyle = col(0);
+      ctx.fillText(pt.values[0], mid - 24, y + 130);
+      ctx.textAlign = "left";
+      ctx.fillStyle = col(1);
+      ctx.fillText(pt.values[1], mid + 24, y + 130);
+      ctx.textAlign = "center";
+      ctx.fillStyle = C.muted;
+      ctx.font = font(fitSize(ctx, pt.note, cardW - 48, 21, 16, 400), 400);
+      ctx.fillText(pt.note, mid, y + 206);
+    });
+
+    // 战前累计
+    y += cardH + 36;
+    const g = ctx.createLinearGradient(0, y, W, y + bandH);
+    g.addColorStop(0, C.darkA);
+    g.addColorStop(1, C.darkB);
+    ctx.fillStyle = g;
+    roundRect(ctx, pad, y, inner, bandH, 22);
+    ctx.fill();
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.lime;
+    ctx.font = font(22, 800);
+    ctx.fillText(d.beforeTitle, pad + 32, y + bandH / 2);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = font(fitSize(ctx, d.beforeLine, inner - 300, 28, 18, 700), 700);
+    ctx.fillText(d.beforeLine, W - pad - 32, y + bandH / 2);
+
+    const fy = H - 180;
+    ctx.fillStyle = C.lime;
+    roundRect(ctx, pad, fy, inner, 84, 18);
+    ctx.fill();
+    ctx.fillStyle = "#1d2600";
+    ctx.textAlign = "left";
+    ctx.font = font(26, 800);
+    ctx.fillText(d.projectTitle, pad + 30, fy + 43);
+    ctx.textAlign = "right";
+    ctx.font = font(24, 700);
+    ctx.fillText(d.slogan, W - pad - 30, fy + 43);
+    ctx.fillStyle = C.muted;
+    ctx.textAlign = "center";
+    ctx.font = font(fitSize(ctx, d.footnote, inner, 20, 16, 400), 400);
+    ctx.fillText(d.footnote, W / 2, fy + 130);
+    return canvas;
+  }
+
   function toJpeg(canvas) {
     // 画布已整体绘制不透明背景；质量 0.95
     return canvas.toDataURL("image/jpeg", 0.95);
   }
 
-  window.Poster = { drawScorePoster, drawBoardPoster, toJpeg, initial,
+  window.Poster = { drawScorePoster, drawBoardPoster, drawReportPoster, drawSubjectPoster, toJpeg, initial,
     util: { W, C, FONT, font, fitSize, setSpacing, roundRect, drawAvatar, drawName, loadImages, ready } };
 })();
