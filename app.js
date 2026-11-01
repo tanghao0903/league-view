@@ -3,13 +3,13 @@
   "use strict";
 
   const SUBJECTS = [
-    { code: "math", name: "数学" },
-    { code: "english", name: "英语" },
-    { code: "physics", name: "物理" },
-    { code: "chemistry", name: "化学" },
+    { code: "math", name: "数学", full: "150" },
+    { code: "english", name: "英语", full: "150" },
+    { code: "physics", name: "物理", full: "70" },
+    { code: "chemistry", name: "化学", full: "70" },
   ];
-  const SYS_NAME = { A: "A 分差积分", C: "C 联赛积分" };
-  const BOARD_NAME = { A: "A 分差积分榜", C: "C 联赛积分榜" };
+  const SYS_NAME = { A: "分差积分", C: "联赛积分" };
+  const BOARD_NAME = { A: "分差积分榜", C: "联赛积分榜" };
   const STATUS_CHIP = {
     draft: ["draft", "草稿 · 未结算"],
     settled: ["ok", "已结算"],
@@ -234,7 +234,7 @@
   };
   const HOME_TILES = RO
     ? [
-        { key: "board", name: "积分榜", desc: "A 分差榜 · C 联赛榜" },
+        { key: "board", name: "积分榜", desc: "分差榜 · 联赛榜" },
         { key: "summary", name: "积分明细", desc: "每次考试每科加了多少" },
         { key: "poster", name: "学科比分", desc: "四科比分海报" },
         { key: "report", name: "战报", desc: "一科出分就公布" },
@@ -244,7 +244,7 @@
         { key: "entry", name: "成绩录入", desc: "新建考试 · 填成绩 · 结算" },
         { key: "summary", name: "积分汇总", desc: "本次 / 累计积分" },
         { key: "poster", name: "学科比分海报", desc: "四科或单科海报" },
-        { key: "board", name: "用户积分榜", desc: "A / C 两张榜" },
+        { key: "board", name: "用户积分榜", desc: "分差榜 · 联赛榜" },
         { key: "report", name: "战报", desc: "单科 / 整场战报" },
         { key: "materials", name: "学习资料", desc: "添加与发布资料" },
         { key: "publish", name: "发布给朋友", desc: "更新朋友的看板" },
@@ -353,7 +353,7 @@
           <button class="btn primary" id="settle-btn">结算本次考试</button>
         </div>
       </div>
-      <div class="note">C 联赛积分：胜 3、平 1、负 0；分差达满分 5% 加 1，达 10% 加 2（互斥）。A 分差积分：胜者得原始分差。缺考者两套都为 0，参考者 C 得 3（无奖励）、A 为 0。最后再乘考试倍率。两套积分各自累计，永不相加。</div>`;
+      <div class="note">联赛积分：胜 3、平 1、负 0；分差达满分 5% 加 1，达 10% 加 2（互斥）。分差积分：胜者得原始分差。缺考者两套都为 0，参考者联赛得 3（无奖励）、分差为 0。最后再乘考试倍率。两套积分各自累计，永不相加。</div>`;
 
     bindCreateButtons(view);
     $("#ev-select").addEventListener("change", (e) => go(`#/entry/${e.target.value}`));
@@ -399,18 +399,20 @@
       const td = $(`[data-trial="${s.code}"]`);
       const r = d.draft[s.code];
       td.innerHTML = r
-        ? `A <b>${esc(r.a[0])} : ${esc(r.a[1])}</b><br>C <b>${esc(r.c[0])} : ${esc(r.c[1])}</b><br><a class="small" href="#/report/${ev.id}/${s.code}">发布这一科 →</a>`
+        ? `分差 <b>${esc(r.a[0])} : ${esc(r.a[1])}</b><br>联赛 <b>${esc(r.c[0])} : ${esc(r.c[1])}</b><br><a class="small" href="#/report/${ev.id}/${s.code}">发布这一科 →</a>`
         : "待录入，暂无结果";
     });
     $("#processed").textContent = `已处理 ${d.processed} / ${d.total_cells} 项`;
     const t = d.draft_totals;
+    const unready = (d.unready || []).map(subjName);
     $("#draft-totals").innerHTML = t
-      ? `本次试算 A <b>${esc(t.a[0])} : ${esc(t.a[1])}</b> · C <b>${esc(t.c[0])} : ${esc(t.c[1])}</b>`
+      ? `本次试算${unready.length ? `（不含${esc(unready.join("、"))}）` : ""} 分差 <b>${esc(t.a[0])} : ${esc(t.a[1])}</b> · 联赛 <b>${esc(t.c[0])} : ${esc(t.c[1])}</b>`
       : "";
     const btn = $("#settle-btn");
     btn.disabled = !d.can_settle;
     btn.textContent = ev.status === "dirty" ? "重新结算" : ev.status === "settled" ? "已结算" : "结算本次考试";
-    btn.title = d.processed < d.total_cells ? "四科八项全部处理完才能结算" : "";
+    btn.title = !t ? "至少要有一科两人都录完（或标缺考）才能结算"
+      : unready.length ? `${unready.join("、")}还没出齐，这次结算不计这几科` : "";
   }
 
   function wireCell(cell, eventId) {
@@ -482,6 +484,8 @@
   let settling = false;
   async function settle(eventId) {
     if (settling) return;
+    const unready = currentDetail ? (currentDetail.unready || []).map(subjName) : [];
+    if (unready.length && !confirm(`${unready.join("、")}还没出齐，这次结算不计这几科（积分记 0）。\n之后补录成绩，本场会提示“有未结算修改”，再点“重新结算”就会算进去。\n\n确定现在结算？`)) return;
     settling = true;
     const btn = $("#settle-btn");
     btn.disabled = true;
@@ -490,7 +494,7 @@
       await saveChain;
       const rev = currentDetail ? currentDetail.event.revision : undefined;
       const res = await api("POST", `/events/${eventId}/settle`, { revision: rev });
-      toast(res.result.changed ? "已结算，A/C 两套累计榜已更新。可以点“战报”发布整场战报。" : "这次考试已经是最新结算，没有重复累计。");
+      toast(res.result.changed ? "已结算，两套累计榜已更新。可以点“战报”发布整场战报。" : "这次考试已经是最新结算，没有重复累计。");
       settling = false;
       await route();
     } catch (e) {
@@ -531,6 +535,17 @@
     $all("#mult-row label", root).forEach((l) => l.classList.toggle("on", $("input", l).checked));
   }
 
+  function fullMarkFields(marks) {
+    return `<div class="field"><span>各科满分（这场考试）</span><div class="row full-marks">
+      ${SUBJECTS.map((s) => `<label class="field"><span>${s.name}</span><input type="text" inputmode="decimal" data-full="${s.code}" value="${esc(marks[s.code] || s.full)}"></label>`).join("")}
+    </div></div>`;
+  }
+  function readFullMarks(root) {
+    const out = {};
+    $all("[data-full]", root).forEach((i) => { out[i.dataset.full] = i.value.trim(); });
+    return out;
+  }
+
   function openCreate(kind) {
     const weeks = APP.events.filter((e) => e.kind === "weekly").map((e) => e.week_no);
     const nextWeek = weeks.length ? Math.max(...weeks) + 1 : 1;
@@ -542,13 +557,15 @@
           <label class="field"><span>周次</span><input type="number" min="1" max="99" id="f-week" value="${nextWeek}"></label>
           <label class="field"><span>考试日期</span><input type="date" id="f-date" value="${today}"></label>
         </div>
-        <p class="muted small">周测固定 ×1。数学、英语满分 150；物理、化学为已赋分成绩，满分 70。</p>
+        ${fullMarkFields({})}
+        <p class="muted small">周测固定 ×1。默认数学、英语满分 150，物理、化学（已赋分）满分 70；这场卷子满分不一样就在上面改。</p>
       </div>` : `
       <h3>新建特殊考试</h3>
       <div class="form">
         <label class="field"><span>考试名称</span><input type="text" id="f-name" value="期中考试" maxlength="20"></label>
         <label class="field"><span>考试日期</span><input type="date" id="f-date" value="${today}"></label>
         ${multiplierPicker("2")}
+        ${fullMarkFields({})}
         <p class="muted small">期中默认 ×2；其他特殊考试默认 ×1，请按需选择。特殊考试是独立批次，与周测共用累计榜，不覆盖任何周测。</p>
       </div>`;
     modal(body + `<div class="form-error" id="f-err"></div>
@@ -564,7 +581,7 @@
       first.focus();
       first.select && first.select();
       $("#f-ok", root).addEventListener("click", async () => {
-        const payload = { kind, exam_date: $("#f-date", root).value };
+        const payload = { kind, exam_date: $("#f-date", root).value, full_marks: readFullMarks(root) };
         if (kind === "weekly") payload.week_no = $("#f-week", root).value;
         else {
           payload.name = $("#f-name", root).value;
@@ -584,6 +601,8 @@
 
   function openEditEvent(ev) {
     const special = ev.kind === "special";
+    const marks = {};
+    ((currentDetail && currentDetail.event.id === ev.id && currentDetail.subjects) || []).forEach((s) => { marks[s.code] = s.full_mark; });
     modal(`
       <h3>编辑批次</h3>
       <div class="form">
@@ -595,7 +614,8 @@
           <label class="field"><span>同日排序序号</span><input type="number" id="f-seq" value="${ev.seq}"></label>
         </div>
         ${special ? multiplierPicker(ev.multiplier) : ""}
-        <p class="muted small">历史榜按“日期 → 排序序号”决定先后。修改倍率会让这次考试需要重新结算；修改名称、日期不改变积分。</p>
+        ${fullMarkFields(marks)}
+        <p class="muted small">历史榜按“日期 → 排序序号”决定先后。修改倍率或满分会让这次考试需要重新结算（满分影响联赛优势奖励的 5% / 10% 门槛）；修改名称、日期不改变积分。</p>
       </div>
       <div class="form-error" id="f-err"></div>
       <div class="actions">
@@ -605,7 +625,7 @@
       </div>`, (root, close) => {
       if (special) wireMultiplier(root);
       $("#f-ok", root).addEventListener("click", async () => {
-        const payload = { exam_date: $("#f-date", root).value, seq: $("#f-seq", root).value };
+        const payload = { exam_date: $("#f-date", root).value, seq: $("#f-seq", root).value, full_marks: readFullMarks(root) };
         if (special) {
           payload.name = $("#f-name", root).value;
           payload.multiplier = $('input[name="mult"]:checked', root).value;
@@ -638,8 +658,8 @@
   // ---------- 积分汇总 ----------
   function sysToggle(current) {
     return `<div class="field"><span>积分体系</span><div class="seg" id="sys-seg">
-      <button data-sys="A" class="${current === "A" ? "on" : ""}">A 分差积分</button>
-      <button data-sys="C" class="${current === "C" ? "on" : ""}">C 联赛积分</button>
+      <button data-sys="A" class="${current === "A" ? "on" : ""}">分差积分</button>
+      <button data-sys="C" class="${current === "C" ? "on" : ""}">联赛积分</button>
     </div></div>`;
   }
 
@@ -649,7 +669,10 @@
       return s.status === "present" ? s.value : s.status === "absent" ? "缺考" : "待录入";
     };
     if (!res) return `<tr><td colspan="2" class="muted">有人待录入，暂无结果</td></tr>`;
-    const caseText = { normal: "两人正常参考", absent_one: "一人缺考：参考者 C 基础 3 分、无奖励；双方 A 为 0", absent_both: "两人都缺考：双方 0 分" }[res.case];
+    if (res.case === "skipped") return `
+      <tr><th>考试成绩</th><td>${esc(nick(pids[0]))} ${esc(cell(pids[0]))} : ${esc(cell(pids[1]))} ${esc(nick(pids[1]))}</td></tr>
+      <tr><th>情况</th><td>结算时这一科还没出齐，本次不计分（两套积分都是 0）</td></tr>`;
+    const caseText = { normal: "两人正常参考", absent_one: "一人缺考：参考者联赛基础 3 分、无奖励；双方分差为 0", absent_both: "两人都缺考：双方 0 分" }[res.case];
     const bonusText = res.case !== "normal" ? "不适用"
       : res.winner == null ? "平局，无奖励"
         : res.bonus === 2 ? "+2（分差 ≥ 满分 10%）" : res.bonus === 1 ? "+1（分差 ≥ 满分 5%）" : "0（分差 < 满分 5%）";
@@ -658,10 +681,10 @@
       <tr><th>满分</th><td>${esc(res.full_mark)}${subject.scaled ? "（已赋分）" : ""}</td></tr>
       <tr><th>情况</th><td>${esc(caseText)}</td></tr>
       <tr><th>分差</th><td>${res.gap == null ? "—" : esc(res.gap) + "（占满分 " + esc(res.ratio_pct) + "%）"}</td></tr>
-      <tr><th>C 优势奖励</th><td>${esc(bonusText)}</td></tr>
-      <tr><th>基础积分</th><td>A ${esc(res.base_a[0])} : ${esc(res.base_a[1])} · C ${esc(res.base_c[0])} : ${esc(res.base_c[1])}</td></tr>
+      <tr><th>联赛优势奖励</th><td>${esc(bonusText)}</td></tr>
+      <tr><th>基础积分</th><td>分差 ${esc(res.base_a[0])} : ${esc(res.base_a[1])} · 联赛 ${esc(res.base_c[0])} : ${esc(res.base_c[1])}</td></tr>
       <tr><th>倍率</th><td>×${esc(res.multiplier)}</td></tr>
-      <tr><th>最终积分</th><td><b>A ${esc(res.a[0])} : ${esc(res.a[1])} · C ${esc(res.c[0])} : ${esc(res.c[1])}</b></td></tr>`;
+      <tr><th>最终积分</th><td><b>分差 ${esc(res.a[0])} : ${esc(res.a[1])} · 联赛 ${esc(res.c[0])} : ${esc(res.c[1])}</b></td></tr>`;
   }
 
   async function renderSummary(id, q) {
@@ -704,7 +727,7 @@
           <div class="card-head"><h3>草稿试算 · ${SYS_NAME[sys]}</h3><span class="chip draft">未结算，不计入累计</span></div>
           <div class="table-wrap"><table class="grid">
             <thead><tr><th>${esc(nick(pids[0]))} : ${esc(nick(pids[1]))}</th>${SUBJECTS.map((s) => `<th>${s.name}</th>`).join("")}<th>本次总计</th></tr></thead>
-            <tbody><tr><td>试算积分</td>${subj}<td>${dt ? `<b>${esc(dt[key][0])} : ${esc(dt[key][1])}</b>` : "四科未齐"}</td></tr></tbody>
+            <tbody><tr><td>试算积分</td>${subj}<td>${dt ? `<b>${esc(dt[key][0])} : ${esc(dt[key][1])}</b>${(d.unready || []).length ? `<br><span class="muted small">不含${esc(d.unready.map(subjName).join("、"))}</span>` : ""}` : "暂无出齐的科目"}</td></tr></tbody>
           </table></div>
           <div class="card-foot"><div class="grow">${ev.status === "dirty" ? `上表“本次”仍是修订 ${ev.settled_revision} 的结算结果。` : "这次考试还没有结算。"}</div>
           <button class="btn primary" id="goto-entry">去录入页结算 →</button></div>
@@ -745,7 +768,7 @@
         <div class="card-foot">
           <div class="grow">本次 = ${esc(ev.label)}；累计范围 = ${esc(scopeText)}（${t.scope.settled_count} 次已结算考试）。</div>
           <button class="btn" id="to-poster">生成比分海报</button>
-          <button class="btn primary" id="to-board">查看${sys === "A" ? " A 分差榜" : " C 联赛榜"} →</button>
+          <button class="btn primary" id="to-board">查看${sys === "A" ? "分差榜" : "联赛榜"} →</button>
         </div>
       </div>
       ${draftCard}
@@ -843,6 +866,8 @@
     const scores = useSettled ? d.settlement.scores : d.scores;
     const pids = d.participants.map(String);
     const chosen = subject === "all" ? d.subjects : d.subjects.filter((s) => s.code === subject);
+    // 已结算版本用结算时的满分快照
+    const fullOf = (s) => (useSettled && d.settlement.results[s.code] ? d.settlement.results[s.code].full_mark : s.full_mark);
     const rows = chosen.map((s) => {
       const cells = pids.map((pid) => scores[s.code][pid]);
       const sts = cells.map((c) => c.status);
@@ -850,7 +875,7 @@
       const caption = sts.includes("pending") ? "待录入 · 暂无正式结果" : sts.includes("absent") ? "缺考不计分差" : "考试原始分数";
       return {
         subject: s.name,
-        meta: (s.scaled ? `已赋分 / 满分 ${s.full_mark}` : `满分 ${s.full_mark}`) + " · " + state,
+        meta: (s.scaled ? `已赋分 / 满分 ${fullOf(s)}` : `满分 ${fullOf(s)}`) + " · " + state,
         cells,
         caption,
       };
@@ -941,14 +966,14 @@
       rows,
       participants: people(),
       bigLabel,
-      footLeft: sys === "A" ? "A 分差积分 · 胜者得原始分差 · 与 C 榜独立累计" : "C 联赛积分 · 胜3 平1 负0 + 优势奖励 · 与 A 榜独立累计",
+      footLeft: sys === "A" ? "分差积分 · 胜者得原始分差 · 与联赛榜独立累计" : "联赛积分 · 胜3 平1 负0 + 优势奖励 · 与分差榜独立累计",
       footRight: (APP.demo ? "演示数据 · " : RO ? "发布 " : "导出 ") + fmtDate(APP.today),
     };
-    const filename = `${APP.title}_${(cutEv ? "截至" + compactLabel(cutEv) : last ? "截至" + compactLabel(last) : "暂无结算")}_${sys === "A" ? "A分差榜" : "C联赛榜"}.jpg`;
+    const filename = `${APP.title}_${(cutEv ? "截至" + compactLabel(cutEv) : last ? "截至" + compactLabel(last) : "暂无结算")}_${sys === "A" ? "分差榜" : "联赛榜"}.jpg`;
     const cutOpts = [`<option value="all">全部已结算考试</option>`].concat(eventsNewestFirst().map((ev) => `<option value="${ev.id}" ${String(ev.id) === String(cutoff) ? "selected" : ""}>截至 ${esc(ev.label)}${ev.status === "draft" ? "（本批未结算）" : ""}</option>`)).join("");
     view.innerHTML = `
       <section class="page-head">
-        <div><h1>用户积分榜</h1><p>A 分差榜与 C 联赛榜分别排序，同分并列，不用另一套积分破同分。</p></div>
+        <div><h1>用户积分榜</h1><p>分差榜与联赛榜分别排序，同分并列，不用另一套积分破同分。</p></div>
         <div class="toolbar">
           ${sysToggle(sys)}
           <label class="field"><span>截止范围</span><select id="cut-select">${cutOpts}</select></label>
@@ -1024,7 +1049,7 @@
         : res.bonus ? `胜 3 + 优势奖励 ${res.bonus}（分差 ${res.ratio_pct}%）${mult}` : `胜 3（分差 ${res.ratio_pct}%，未达 5% 无奖励）${mult}`;
     } else if (res.case === "absent_one") {
       verdict = `${names[1 - w]} 缺考`;
-      aNote = "有人缺考，A 分差积分不计";
+      aNote = "有人缺考，分差积分不计";
       cNote = `参考者得 3，无奖励${mult}`;
     } else {
       verdict = "双方缺考";
@@ -1043,11 +1068,11 @@
       winner: w,
       verdict,
       points: [
-        { label: "A 分差积分", values: res.a, winner: win(res.a), note: aNote },
-        { label: "C 联赛积分", values: res.c, winner: win(res.c), note: cNote },
+        { label: "分差积分", values: res.a, winner: win(res.a), note: aNote },
+        { label: "联赛积分", values: res.c, winner: win(res.c), note: cNote },
       ],
       beforeTitle: r.prev_label ? `战前累计 · 截至${r.prev_label}` : "战前累计",
-      beforeLine: r.prev_label ? `A ${b.a[0]} : ${b.a[1]}　·　C ${b.c[0]} : ${b.c[1]}` : "联赛首战，双方都从 0 分开始",
+      beforeLine: r.prev_label ? `分差 ${b.a[0]} : ${b.a[1]}　·　联赛 ${b.c[0]} : ${b.c[1]}` : "联赛首战，双方都从 0 分开始",
       projectTitle: APP.title,
       slogan: "这一科，先见分晓。",
       footnote: (r.settled ? "整场已结算" : "单科先发 · 本场还没结算，正式累计以整场结算为准")
@@ -1080,7 +1105,7 @@
     const names = ps.map((p) => p.nickname);
     const win = (vals) => (Number(vals[0]) === Number(vals[1]) ? null : Number(vals[0]) > Number(vals[1]) ? 0 : 1);
     const verdict = (vals) => { const w = win(vals); return w == null ? "本场打平" : `${names[w]} 胜`; };
-    const thisLines = [["A 分差积分", "a"], ["C 联赛积分", "c"]].map(([label, k]) => ({
+    const thisLines = [["分差积分", "a"], ["联赛积分", "c"]].map(([label, k]) => ({
       label, values: r.totals[k], winner: win(r.totals[k]), verdict: verdict(r.totals[k]),
     }));
     const subjects = r.subjects.map((s) => {
@@ -1089,13 +1114,14 @@
       const absent = cells.some((c) => c.status === "absent");
       return {
         name: s.name,
-        meta: (s.scaled ? "已赋分 · " : "") + `满分 ${s.full_mark}` + (absent ? " · 有缺考" : ""),
+        meta: (s.scaled ? "已赋分 · " : "") + `满分 ${res.full_mark || s.full_mark}`
+          + (res.case === "skipped" ? " · 未出齐，不计分" : absent ? " · 有缺考" : ""),
         cells, a: res.a, c: res.c,
         winner: res.winner == null ? null : Number(res.winner),
       };
     });
     const order = (list) => r.participants.map((pid) => list.find((x) => x.participant_id === Number(pid)));
-    const standings = [["A 分差积分榜", "a"], ["C 联赛积分榜", "c"]].map(([label, k]) => {
+    const standings = [["分差积分榜", "a"], ["联赛积分榜", "c"]].map(([label, k]) => {
       const st = order(r.standings[k]);
       return {
         label,
@@ -1161,13 +1187,13 @@
     const progress = `<div class="card">
       <div class="card-head"><h3>本场各科</h3><span class="chip">${RO ? "已公布" : "已出齐"} ${done.length} / 4 科</span></div>
       <div class="table-wrap"><table class="report-progress">
-        <thead><tr><th>科目</th><th>A 分差</th><th>C 联赛</th><th></th></tr></thead>
+        <thead><tr><th>科目</th><th>分差</th><th>联赛</th><th></th></tr></thead>
         <tbody>${subjRows}
-          <tr class="${cur === "exam" ? "on" : ""}" ${examReady ? `data-go="exam"` : ""}><td><b>整场</b></td><td colspan="2">${it.totals ? `A ${esc(it.totals.a[0])} : ${esc(it.totals.a[1])} · C ${esc(it.totals.c[0])} : ${esc(it.totals.c[1])}` : `<span class="muted">${RO ? "待公布" : "结算后可发"}</span>`}</td>
+          <tr class="${cur === "exam" ? "on" : ""}" ${examReady ? `data-go="exam"` : ""}><td><b>整场</b></td><td colspan="2">${it.totals ? `分差 ${esc(it.totals.a[0])} : ${esc(it.totals.a[1])} · 联赛 ${esc(it.totals.c[0])} : ${esc(it.totals.c[1])}` : `<span class="muted">${RO ? "待公布" : "结算后可发"}</span>`}</td>
           <td>${itemChip(it.exam, examReady)}${examOrphan ? ` <button class="btn ghost small-btn" data-withdraw="exam">撤下</button>` : ""}</td></tr>
         </tbody>
       </table></div>
-      ${done.length && !it.totals ? (() => { const a = sumPairs(done.map((s) => s.a)); const c = sumPairs(done.map((s) => s.c)); return `<div class="muted small" style="margin-top:8px">已出 ${done.length} 科小计：A ${a[0]} : ${a[1]} · C ${c[0]} : ${c[1]}（本场还没结算，不进累计榜）</div>`; })() : ""}
+      ${done.length && !it.totals ? (() => { const a = sumPairs(done.map((s) => s.a)); const c = sumPairs(done.map((s) => s.c)); return `<div class="muted small" style="margin-top:8px">已出 ${done.length} 科小计：分差 ${a[0]} : ${a[1]} · 联赛 ${c[0]} : ${c[1]}（本场还没结算，不进累计榜）</div>`; })() : ""}
     </div>`;
 
     const head = `
@@ -1220,11 +1246,11 @@
     const shown = items.filter((it) => reportViews(it).length || publishedParts(it).length);
     const rows = shown.map((it) => {
       const done = it.subjects.filter((s) => (RO ? s.published : s.ready)).map((s) => s.name);
-      const prog = it.settled && !RO ? "四科已结算" : done.length ? `${RO ? "已公布" : "已出齐"}：${done.join("、")}` : "";
+      const prog = it.settled && !RO ? "已结算" : done.length ? `${RO ? "已公布" : "已出齐"}：${done.join("、")}` : "";
       return `
       <a class="report-row" href="#/report/${it.id}">
         <div class="grow"><b>${esc(it.label)}</b> <span class="muted small">${esc(it.exam_date)} · ${esc(kindText(it))}</span>
-          <div class="muted small">${esc(prog)}${it.totals ? ` · 整场 A ${esc(it.totals.a[0])} : ${esc(it.totals.a[1])} · C ${esc(it.totals.c[0])} : ${esc(it.totals.c[1])}` : ""}</div></div>
+          <div class="muted small">${esc(prog)}${it.totals ? ` · 整场分差 ${esc(it.totals.a[0])} : ${esc(it.totals.a[1])} · 联赛 ${esc(it.totals.c[0])} : ${esc(it.totals.c[1])}` : ""}</div></div>
         ${reportChip(it)}
         <span class="go">→</span>
       </a>`;
@@ -1614,9 +1640,9 @@
           <div class="card-head"><h3>当前规则</h3><span class="chip">${esc(APP.rule_version)}</span></div>
           <ul>
             <li>每周数学、英语、物理、化学各一次；满分 150 / 150 / 70 / 70，物理化学直接录入已赋分成绩。</li>
-            <li><b>A 分差积分</b>：胜者得原始分差，败者 0，平局双方 0。</li>
-            <li><b>C 联赛积分</b>：胜 3、平 1、负 0；分差 ≥ 满分 5% 额外 +1，≥ 10% 额外 +2（互斥）。</li>
-            <li><b>缺考</b>：缺考者 A、C 都为 0；参考者 A 为 0、C 得 3（无奖励）。双方缺考均为 0。缺考不是 0 分。</li>
+            <li><b>分差积分</b>：胜者得原始分差，败者 0，平局双方 0。</li>
+            <li><b>联赛积分</b>：胜 3、平 1、负 0；分差 ≥ 满分 5% 额外 +1，≥ 10% 额外 +2（互斥）。</li>
+            <li><b>缺考</b>：缺考者两套都为 0；参考者分差为 0、联赛得 3（无奖励）。双方缺考均为 0。缺考不是 0 分。</li>
             <li><b>倍率</b>：周测 ×1，期中 ×2，其他特殊考试创建时选择。先算基础积分再乘倍率。</li>
             <li>两套积分分别累计、分别排名，永远不相加；累计包含本次已结算积分；同分并列。</li>
           </ul>
@@ -1711,7 +1737,7 @@
           <div class="stack" style="display:flex;flex-direction:column;gap:10px">
             ${evs.length ? "" : `<div class="note warn">还没有已结算的考试，现在只能发布“清空”。</div>`}
             <label class="field"><span>发布范围</span><select id="pub-cutoff">${evOpts}</select></label>
-            <div class="note">会发布：两位用户的昵称和头像、范围内每次考试<b>已结算版本</b>的成绩、A/C 两套积分和排名。<br>不会发布：草稿、结算后还没重新结算的修改、备份、电脑上的文件路径。单科 / 整场战报单独发布，见下面第 3 步。</div>
+            <div class="note">会发布：两位用户的昵称和头像、范围内每次考试<b>已结算版本</b>的成绩、两套积分和排名。<br>不会发布：草稿、结算后还没重新结算的修改、备份、电脑上的文件路径。单科 / 整场战报单独发布，见下面第 3 步。</div>
             ${info.demo ? `<div class="note warn">现在是演示模式，只能预览，不能发布。发布真实成绩请用“启动.bat”。</div>` : ""}
             <div class="btns">
               <button class="btn" id="pub-preview">先预览朋友看到的页面</button>
@@ -1728,7 +1754,7 @@
         <div class="card" style="grid-column:1/-1">
           <div class="card-head"><h3>3 · 单科 / 整场战报</h3>${pubReports.length ? `<span class="chip ok">${pubReports.length} 场考试有已发布的战报</span>` : ""}</div>
           <div class="stack" style="display:flex;flex-direction:column;gap:10px">
-            <p class="muted small" style="margin:0">某一科两个人的成绩出齐，就能只发布这一科的战报（原始分数、这一科的 A/C 积分），不用等整场结算；整场结算后还可以发布整场战报。朋友用单独的链接直接打开。和上面的累计榜分开：发布、撤下战报不会改动累计榜，上面的发布和撤回也不会动战报。</p>
+            <p class="muted small" style="margin:0">某一科两个人的成绩出齐，就能只发布这一科的战报（原始分数、这一科的分差 / 联赛积分），不用等整场结算；整场结算后还可以发布整场战报。朋友用单独的链接直接打开。和上面的累计榜分开：发布、撤下战报不会改动累计榜，上面的发布和撤回也不会动战报。</p>
             ${latestReady ? `<div class="btns"><a class="btn primary" href="#/report/${latestReady.id}">去发布最新一场：${esc(latestReady.label)} →</a><a class="btn ghost" href="#/report">全部场次</a></div>` : `<div class="note warn">还没有哪一科两个人的成绩都录完。</div>`}
             ${pubReports.length ? `<div class="report-list">${pubReports.map((it) => `<a class="report-row" href="#/report/${it.id}"><div class="grow"><b>${esc(it.label)}</b> <span class="muted small">${esc(it.exam_date)}</span></div>${reportChip(it)}<span class="go">→</span></a>`).join("")}</div>` : ""}
           </div>

@@ -427,7 +427,7 @@
     ctx.fillStyle = "#b9b2c6";
     ctx.font = font(22, 400);
     ctx.fillText("常规周测 + 特殊考试", pad, by + 140);
-    ctx.fillText("A / C 各自累计、各自排名，互不相加。", pad, by + 174);
+    ctx.fillText("两套积分各自累计、各自排名，互不相加。", pad, by + 174);
 
     const fy = H - 110;
     ctx.strokeStyle = "rgba(255,255,255,0.14)";
@@ -512,7 +512,7 @@
       ctx.fillText(vals[1], cx + gap, cy);
     }
 
-    // 对阵块：本场 A / C 积分
+    // 对阵块：本场分差 / 联赛积分
     y = 360;
     ctx.fillStyle = C.purple;
     roundRect(ctx, pad, y, inner, vsH, 28);
@@ -558,8 +558,8 @@
     ctx.font = font(22, 400);
     ctx.textAlign = "center";
     ctx.fillText("原始分数", colScore, y + 6);
-    ctx.fillText("A 分差", colA, y + 6);
-    ctx.fillText("C 联赛", colC, y + 6);
+    ctx.fillText("分差", colA, y + 6);
+    ctx.fillText("联赛", colC, y + 6);
     y += 28;
     d.subjects.forEach((r) => {
       ctx.strokeStyle = C.line;
@@ -658,7 +658,7 @@
     return canvas;
   }
 
-  /* ---------- 单科战报：一科一张（大比分 + 本科 A/C 积分 + 战前累计） ---------- */
+  /* ---------- 单科战报：一科一张（大比分 + 本科分差 / 联赛积分 + 战前累计） ---------- */
   async function drawSubjectPoster(canvas, d) {
     await ready();
     const people = await loadImages(d.participants);
