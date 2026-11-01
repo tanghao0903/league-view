@@ -2,19 +2,122 @@
 (function () {
   "use strict";
 
-  const FONT = '"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","WenQuanYi Zen Hei",sans-serif';
+  const FONT = '"Noto Sans SC","Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC","WenQuanYi Zen Hei",sans-serif';
   const W = 1080;
+  /* 终端 / 霓虹配色（与网页一致：#07060b 底、青 / 品红 / 酸性黄绿） */
   const C = {
-    purple: "#360046",
-    light: "#fbfafc",
-    muted: "#7a7287",
-    line: "#e3dde9",
-    lime: "#ceff48",
-    darkA: "#241a2f",
-    darkB: "#17161c",
-    avatarBg: ["#e4e2f7", "#e6f2d2"],
-    avatarInk: ["#2e2a80", "#3c5200"],
+    purple: "#00f0ff",      // 旧名沿用：主色 = 霓虹青
+    neon: "#00f0ff",
+    magenta: "#ff2bd6",
+    bg: "#07060b",
+    light: "#07060b",
+    ink: "#e9f6ff",
+    muted: "#7d8aa3",
+    violet: "#7b2bff",
+    dim: "#4d5070",
+    line: "rgba(0,240,255,0.18)",
+    lime: "#f5ff3b",
+    limeInk: "#000000",
+    darkA: "#120f2c",
+    darkB: "#08071a",
+    avatarBg: ["#062a33", "#2e0a2a"],
+    avatarInk: ["#00f0ff", "#ff2bd6"],
   };
+  const MONO = '"Share Tech Mono",ui-monospace,Menlo,Consolas,monospace';
+  const DISP = '"Orbitron","Eurostile","Arial Black",sans-serif';
+  function disp(size, weight) { return `${weight || 700} ${size}px ${DISP}`; }
+  function mono(size, weight) { return `${weight || 400} ${size}px ${MONO}`; }
+
+  /* 背景：近黑底 + 两团霓虹光晕 + 网格 + 扫描线 + 顶部 SYS 状态行 */
+  function cyberBg(ctx, H, label) {
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+    const g1 = ctx.createRadialGradient(W * 0.9, -40, 0, W * 0.9, -40, W * 0.9);
+    g1.addColorStop(0, "rgba(255,43,214,0.22)");
+    g1.addColorStop(1, "rgba(255,43,214,0)");
+    ctx.fillStyle = g1;
+    ctx.fillRect(0, 0, W, H);
+    const g2 = ctx.createRadialGradient(-60, H * 0.55, 0, -60, H * 0.55, W);
+    g2.addColorStop(0, "rgba(123,43,255,0.2)");
+    g2.addColorStop(1, "rgba(0,240,255,0)");
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(0,240,255,0.06)";
+    ctx.lineWidth = 1;
+    for (let x = 0.5; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0.5; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    ctx.fillStyle = "rgba(0,0,0,0.16)";
+    for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+    // 顶部霓虹线 + 状态行
+    const bar = ctx.createLinearGradient(0, 0, W, 0);
+    bar.addColorStop(0, C.magenta);
+    bar.addColorStop(0.5, C.neon);
+    bar.addColorStop(1, C.lime);
+    ctx.fillStyle = bar;
+    ctx.fillRect(0, 0, W, 6);
+    ctx.save();
+    ctx.font = mono(16, 400);
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.neon;
+    setSpacing(ctx, 3);
+    ctx.fillText(label || "SYS://ACADEMIC-LEAGUE", 40, 30);
+    ctx.textAlign = "right";
+    ctx.fillStyle = C.lime;
+    ctx.fillText("NEURAL LINK · ONLINE", W - 40, 30);
+    ctx.fillStyle = C.magenta;
+    ctx.beginPath();
+    ctx.arc(W - 40 - ctx.measureText("NEURAL LINK · ONLINE").width - 16, 30, 4, 0, Math.PI * 2);
+    ctx.fill();
+    setSpacing(ctx, 0);
+    ctx.restore();
+    // 底部角标
+    ctx.save();
+    ctx.strokeStyle = C.neon;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = C.neon;
+    ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(24, 90); ctx.lineTo(24, 54); ctx.lineTo(60, 54); ctx.stroke();
+    ctx.strokeStyle = C.magenta;
+    ctx.shadowColor = C.magenta;
+    ctx.beginPath(); ctx.moveTo(W - 24, H - 60); ctx.lineTo(W - 24, H - 24); ctx.lineTo(W - 60, H - 24); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* 霓虹面板：深色填充 + 一层淡色渐变 + 发光描边 */
+  function neonBox(ctx, x, y, w, h, r, color, tint) {
+    ctx.save();
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fillStyle = "#0d0b1f";
+    ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, tint || hexA(color, 0.2));
+    g.addColorStop(1, "rgba(123,43,255,0.08)");
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    roundRect(ctx, x + 1, y + 1, w - 2, h - 2, r);
+    ctx.stroke();
+    ctx.restore();
+  }
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  /* 发光文字 */
+  function glowText(ctx, text, x, y, color, blur) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = blur || 18;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+  }
 
   function font(size, weight) {
     return `${weight || 400} ${size}px ${FONT}`;
@@ -110,14 +213,22 @@
       const s = Math.min(img.naturalWidth, img.naturalHeight);
       ctx.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, x, y, size, size);
     } else {
-      ctx.fillStyle = dark ? "#3a3342" : C.avatarBg[idx];
+      ctx.fillStyle = C.avatarBg[idx];
       ctx.fillRect(x, y, size, size);
-      ctx.fillStyle = dark ? "#ffffff" : C.avatarInk[idx];
+      ctx.fillStyle = C.avatarInk[idx];
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = font(Math.round(size * 0.46), 800);
       ctx.fillText(initial(p.nickname, idx), x + size / 2, y + size / 2 + 1);
     }
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = C.avatarInk[idx];
+    ctx.shadowColor = C.avatarInk[idx];
+    ctx.shadowBlur = 12;
+    ctx.lineWidth = 2;
+    roundRect(ctx, x + 1, y + 1, size - 2, size - 2, size * 0.22);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -141,6 +252,12 @@
   }
 
   async function ready() {
+    if (document.fonts && document.fonts.load) {
+      // 网站同款字体（在线时从 Google Fonts 加载；离线就用备用字体）
+      const want = ['900 40px "Orbitron"', '20px "Share Tech Mono"', '900 40px "Noto Sans SC"'];
+      const timeout = new Promise((r) => setTimeout(r, 2500));
+      try { await Promise.race([Promise.all(want.map((f) => document.fonts.load(f).catch(() => null))), timeout]); } catch (e) { /* 忽略 */ }
+    }
     if (document.fonts && document.fonts.ready) {
       try { await document.fonts.ready; } catch (e) { /* 忽略 */ }
     }
@@ -167,30 +284,29 @@
     canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    ctx.fillStyle = C.light;
-    ctx.fillRect(0, 0, W, H);
+    cyberBg(ctx, H);
 
     // 顶部
     let y = 92;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = C.purple;
-    ctx.font = font(22, 800);
-    setSpacing(ctx, 6);
-    ctx.fillText(d.kicker, pad, y);
+    ctx.fillStyle = C.magenta;
+    ctx.font = mono(22, 700);
+    setSpacing(ctx, 5);
+    ctx.fillText("// " + d.kicker, pad, y);
     setSpacing(ctx, 0);
+    ctx.fillStyle = C.purple;
 
     y += 118;
     const tSize = fitSize(ctx, d.title, inner, 108, 56, 900);
     ctx.font = font(tSize, 900);
-    ctx.fillText(d.title, pad, y);
+    glowText(ctx, d.title, pad, y, "#ffffff", 0);
+    ctx.save(); ctx.shadowColor = C.neon; ctx.shadowBlur = 24; ctx.fillStyle = "#ffffff"; ctx.fillText(d.title, pad, y); ctx.restore();
 
     y += 34;
     ctx.font = font(28, 700);
     const tagW = ctx.measureText(d.tag).width + 52;
-    ctx.fillStyle = C.purple;
-    roundRect(ctx, pad, y, tagW, 58, 12);
-    ctx.fill();
+    neonBox(ctx, pad, y, tagW, 58, 6, C.magenta);
     ctx.fillStyle = "#fff";
     ctx.textBaseline = "middle";
     ctx.fillText(d.tag, pad + 26, y + 30);
@@ -200,7 +316,7 @@
       ctx.fillStyle = C.lime;
       roundRect(ctx, pad + tagW + 14, y, bw, 58, 12);
       ctx.fill();
-      ctx.fillStyle = "#1d2600";
+      ctx.fillStyle = C.limeInk;
       ctx.fillText(d.multiplierBadge, pad + tagW + 34, y + 30);
     }
 
@@ -244,9 +360,7 @@
       const midY = y + 124;
       const boxH = 92;
       const bx = cx - boxW / 2;
-      ctx.fillStyle = C.purple;
-      roundRect(ctx, bx, midY - boxH / 2, boxW, boxH, 14);
-      ctx.fill();
+      neonBox(ctx, bx, midY - boxH / 2, boxW, boxH, 10, C.neon);
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -262,18 +376,16 @@
       drawAvatar(ctx, people[0], 0, ax, midY - avatarSize / 2, avatarSize, false);
       drawAvatar(ctx, people[1], 1, bx2, midY - avatarSize / 2, avatarSize, false);
       const nameMax = ax - nameGap - pad;
-      drawName(ctx, people[0].nickname, ax - nameGap, midY, nameMax, "right", C.purple, 34, 100);
-      drawName(ctx, people[1].nickname, bx2 + avatarSize + nameGap, midY, nameMax, "left", C.purple, 34, 100);
+      drawName(ctx, people[0].nickname, ax - nameGap, midY, nameMax, "right", "#ffffff", 34, 100);
+      drawName(ctx, people[1].nickname, bx2 + avatarSize + nameGap, midY, nameMax, "left", "#ffffff", 34, 100);
 
       y += rowH;
     });
 
     // 页脚
     const fy = H - footH + 30;
+    neonBox(ctx, pad, fy, inner, 84, 8, C.lime, "rgba(212,255,58,0.14)");
     ctx.fillStyle = C.lime;
-    roundRect(ctx, pad, fy, inner, 84, 18);
-    ctx.fill();
-    ctx.fillStyle = "#1d2600";
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     ctx.font = font(26, 800);
@@ -301,42 +413,25 @@
     canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, C.darkA);
-    g.addColorStop(1, C.darkB);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-
-    // 抽象背景：细斜线纹理
-    ctx.save();
-    ctx.strokeStyle = "rgba(206,255,72,0.05)";
-    ctx.lineWidth = 2;
-    for (let i = -H; i < W; i += 46) {
-      ctx.beginPath();
-      ctx.moveTo(i, H);
-      ctx.lineTo(i + H * 0.6, 0);
-      ctx.stroke();
-    }
-    ctx.restore();
+    cyberBg(ctx, H);
 
     let y = 96;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = C.lime;
-    ctx.font = font(22, 800);
-    setSpacing(ctx, 6);
-    ctx.fillText(d.kicker, pad, y);
+    ctx.fillStyle = C.magenta;
+    ctx.font = mono(22, 700);
+    setSpacing(ctx, 5);
+    ctx.fillText("// " + d.kicker, pad, y);
     setSpacing(ctx, 0);
 
-    ctx.fillStyle = "#ffffff";
     y += 104;
     ctx.font = font(fitSize(ctx, d.title1, inner, 84, 48, 900), 900);
-    ctx.fillText(d.title1, pad, y);
+    glowText(ctx, d.title1, pad, y, "#ffffff", 24);
     y += 104;
     ctx.font = font(fitSize(ctx, d.title2, inner, 84, 48, 900), 900);
-    ctx.fillText(d.title2, pad, y);
+    glowText(ctx, d.title2, pad, y, C.neon, 24);
     y += 56;
-    ctx.fillStyle = "#b9b2c6";
+    ctx.fillStyle = C.muted;
     ctx.font = font(26, 400);
     ctx.fillText(d.scopeLine, pad, y);
 
@@ -345,7 +440,7 @@
     ctx.font = font(30, 800);
     ctx.fillText(d.sectionTitle, pad, y);
     ctx.textAlign = "right";
-    ctx.fillStyle = "#b9b2c6";
+    ctx.fillStyle = C.muted;
     ctx.font = font(22, 400);
     ctx.fillText(`${d.rows.length} 位参赛者`, W - pad, y);
 
@@ -357,16 +452,20 @@
     ctx.fillStyle = "rgba(255,255,255,0.045)";
     roundRect(ctx, pad, y, inner, tableH, 28);
     ctx.fill();
-    ctx.strokeStyle = C.lime;
+    ctx.save();
+    ctx.shadowColor = C.neon;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = C.neon;
     ctx.lineWidth = 2;
-    roundRect(ctx, pad + 1, y + 1, inner - 2, tableH - 2, 28);
+    roundRect(ctx, pad + 1, y + 1, inner - 2, tableH - 2, 18);
     ctx.stroke();
+    ctx.restore();
 
     const colRank = pad + 64;
     const colAvatar = pad + 128;
     const colThis = W - pad - 250;
     const colCum = W - pad - 44;
-    ctx.fillStyle = "#a9a1b7";
+    ctx.fillStyle = C.muted;
     ctx.font = font(22, 400);
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
@@ -388,7 +487,7 @@
       const mid = ry + rowH / 2;
       const info = byId[r.participant_id];
       ctx.textAlign = "center";
-      ctx.fillStyle = r.rank === 1 ? C.lime : "#a9a1b7";
+      ctx.fillStyle = r.rank === 1 ? C.lime : C.muted;
       ctx.font = font(46, 300);
       ctx.fillText(String(r.rank), colRank, mid + (r.tied ? -10 : 2));
       if (r.tied) {
@@ -400,7 +499,7 @@
       ctx.font = font(36, 800);
       drawName(ctx, info.p.nickname, nameX, mid, colThis - 120 - nameX, "left", "#ffffff", 36, 104);
       ctx.textAlign = "right";
-      ctx.fillStyle = "#d9d3e2";
+      ctx.fillStyle = "#c9cdf0";
       ctx.font = font(fitSize(ctx, r.thisText, 150, 36, 22, 400), 400);
       ctx.fillText(r.thisText, colThis, mid + 2);
       ctx.fillStyle = "#ffffff";
@@ -417,14 +516,14 @@
     ctx.fillStyle = C.lime;
     const bigSize = fitSize(ctx, d.bigLabel, bigW, 240, 90, 900);
     ctx.font = font(bigSize, 900);
-    ctx.fillText(d.bigLabel, W - pad, by + 150);
+    glowText(ctx, d.bigLabel, W - pad, by + 150, C.lime, 30);
 
     ctx.textAlign = "left";
-    ctx.fillStyle = "#ece4f4";
+    ctx.fillStyle = "#ffffff";
     ctx.font = font(52, 900);
     ctx.fillText("下一次交锋，", pad, by + 20);
     ctx.fillText("由你改写排名。", pad, by + 88);
-    ctx.fillStyle = "#b9b2c6";
+    ctx.fillStyle = C.muted;
     ctx.font = font(22, 400);
     ctx.fillText("常规周测 + 特殊考试", pad, by + 140);
     ctx.fillText("两套积分各自累计、各自排名，互不相加。", pad, by + 174);
@@ -436,7 +535,7 @@
     ctx.moveTo(pad, fy);
     ctx.lineTo(W - pad, fy);
     ctx.stroke();
-    ctx.fillStyle = "#b9b2c6";
+    ctx.fillStyle = C.muted;
     ctx.font = font(20, 400);
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
@@ -459,26 +558,25 @@
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = C.light;
-    ctx.fillRect(0, 0, W, H);
+    cyberBg(ctx, H);
 
     // 顶部
     let y = 92;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = C.purple;
-    ctx.font = font(22, 800);
-    setSpacing(ctx, 6);
-    ctx.fillText(d.kicker, pad, y);
+    ctx.fillStyle = C.magenta;
+    ctx.font = mono(22, 700);
+    setSpacing(ctx, 5);
+    ctx.fillText("// " + d.kicker, pad, y);
     setSpacing(ctx, 0);
+    ctx.fillStyle = C.purple;
     y += 118;
     ctx.font = font(fitSize(ctx, d.title, inner, 108, 56, 900), 900);
-    ctx.fillText(d.title, pad, y);
+    glowText(ctx, d.title, pad, y, "#ffffff", 24);
     y += 34;
     ctx.font = font(28, 700);
     const tagW = ctx.measureText(d.tag).width + 52;
-    roundRect(ctx, pad, y, tagW, 58, 12);
-    ctx.fill();
+    neonBox(ctx, pad, y, tagW, 58, 6, C.magenta);
     ctx.fillStyle = "#fff";
     ctx.textBaseline = "middle";
     ctx.fillText(d.tag, pad + 26, y + 30);
@@ -488,7 +586,7 @@
       ctx.fillStyle = C.lime;
       roundRect(ctx, pad + tagW + 14, y, bw, 58, 12);
       ctx.fill();
-      ctx.fillStyle = "#1d2600";
+      ctx.fillStyle = C.limeInk;
       ctx.fillText(d.multiplierBadge, pad + tagW + 34, y + 30);
     }
     y += 100;
@@ -514,9 +612,7 @@
 
     // 对阵块：本场分差 / 联赛积分
     y = 360;
-    ctx.fillStyle = C.purple;
-    roundRect(ctx, pad, y, inner, vsH, 28);
-    ctx.fill();
+    neonBox(ctx, pad, y, inner, vsH, 18, C.magenta, "rgba(255,43,214,0.16)");
     const av = 88;
     drawAvatar(ctx, people[0], 0, pad + 40, y + 40, av, true);
     drawAvatar(ctx, people[1], 1, W - pad - 40 - av, y + 40, av, true);
@@ -526,19 +622,19 @@
     ctx.fillStyle = C.lime;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = font(34, 900);
-    ctx.fillText("VS", W / 2, y + 40 + av / 2);
+    ctx.font = disp(34, 900);
+    glowText(ctx, "VS", W / 2, y + 40 + av / 2, C.lime, 16);
     const lineY = [y + 196, y + 286];
     d.thisLines.forEach((ln, i) => {
       const cy = lineY[i];
       ctx.textAlign = "left";
-      ctx.fillStyle = "#cfc4dc";
+      ctx.fillStyle = "#a9aed6";
       ctx.font = font(24, 700);
       ctx.fillText(ln.label, pad + 40, cy);
       const hi = (k) => (ln.winner === k ? C.lime : "#ffffff");
-      pair(ln.values, W / 2 + 40, cy + 2, 66, 900, [hi(0), hi(1), "#9d8fb0"], 30);
+      pair(ln.values, W / 2 + 40, cy + 2, 66, 900, [hi(0), hi(1), C.dim], 30);
       ctx.textAlign = "right";
-      ctx.fillStyle = ln.winner == null ? "#cfc4dc" : C.lime;
+      ctx.fillStyle = ln.winner == null ? "#a9aed6" : C.lime;
       ctx.font = font(24, 700);
       ctx.fillText(ln.verdict, W - pad - 40, cy);
     });
@@ -577,7 +673,7 @@
       ctx.fillStyle = C.muted;
       ctx.font = font(19, 400);
       ctx.fillText(r.meta, colName, cy + 22);
-      const hi = (k) => (r.winner === k ? C.purple : C.muted);
+      const hi = (k) => (r.winner === k ? C.neon : C.dim);
       pair([cellText(r.cells[0]), cellText(r.cells[1])], colScore, cy + 2, 44, 800, [hi(0), hi(1), C.muted], 20);
       pair(r.a, colA, cy + 2, 34, 700, [hi(0), hi(1), C.muted], 16);
       pair(r.c, colC, cy + 2, 34, 700, [hi(0), hi(1), C.muted], 16);
@@ -598,17 +694,21 @@
     ctx.fillStyle = g;
     roundRect(ctx, pad, y, inner, boxH, 28);
     ctx.fill();
-    ctx.strokeStyle = C.lime;
+    ctx.save();
+    ctx.shadowColor = C.neon;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = C.neon;
     ctx.lineWidth = 2;
-    roundRect(ctx, pad + 1, y + 1, inner - 2, boxH - 2, 28);
+    roundRect(ctx, pad + 1, y + 1, inner - 2, boxH - 2, 18);
     ctx.stroke();
+    ctx.restore();
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#ffffff";
     ctx.font = font(30, 800);
     ctx.fillText("战后积分榜", pad + 40, y + 52);
     ctx.textAlign = "right";
-    ctx.fillStyle = "#b9b2c6";
+    ctx.fillStyle = C.muted;
     ctx.font = font(22, 400);
     ctx.fillText(d.standingsNote, W - pad - 40, y + 52);
     let sy = y + 90;
@@ -624,15 +724,15 @@
       ctx.font = font(24, 800);
       ctx.fillText(st.label, pad + 40, sy + 44);
       const lead = (k) => (st.leader === k ? C.lime : "#ffffff");
-      pair(st.after, W / 2, sy + 104, 72, 900, [lead(0), lead(1), "#6f6680"], 34);
-      ctx.fillStyle = "#b9b2c6";
+      pair(st.after, W / 2, sy + 104, 72, 900, [lead(0), lead(1), C.dim], 34);
+      ctx.fillStyle = C.muted;
       ctx.font = font(22, 400);
       ctx.textAlign = "right";
       ctx.fillText(st.delta[0], W / 2 - 34, sy + 156);
       ctx.textAlign = "left";
       ctx.fillText(st.delta[1], W / 2 + 34, sy + 156);
       ctx.textAlign = "right";
-      ctx.fillStyle = "#ece4f4";
+      ctx.fillStyle = "#ffffff";
       ctx.font = font(fitSize(ctx, st.story, 380, 24, 18, 700), 700);
       ctx.fillText(st.story, W - pad - 40, sy + 44);
       sy += standRowH;
@@ -640,10 +740,8 @@
 
     // 页脚
     const fy = H - 180;
+    neonBox(ctx, pad, fy, inner, 84, 8, C.lime, "rgba(212,255,58,0.14)");
     ctx.fillStyle = C.lime;
-    roundRect(ctx, pad, fy, inner, 84, 18);
-    ctx.fill();
-    ctx.fillStyle = "#1d2600";
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     ctx.font = font(26, 800);
@@ -671,25 +769,24 @@
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = C.light;
-    ctx.fillRect(0, 0, W, H);
+    cyberBg(ctx, H);
 
     let y = 92;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = C.purple;
-    ctx.font = font(22, 800);
-    setSpacing(ctx, 6);
-    ctx.fillText(d.kicker, pad, y);
+    ctx.fillStyle = C.magenta;
+    ctx.font = mono(22, 700);
+    setSpacing(ctx, 5);
+    ctx.fillText("// " + d.kicker, pad, y);
     setSpacing(ctx, 0);
+    ctx.fillStyle = C.purple;
     y += 118;
     ctx.font = font(fitSize(ctx, d.title, inner, 108, 56, 900), 900);
-    ctx.fillText(d.title, pad, y);
+    glowText(ctx, d.title, pad, y, "#ffffff", 24);
     y += 34;
     ctx.font = font(28, 700);
     const tagW = ctx.measureText(d.tag).width + 52;
-    roundRect(ctx, pad, y, tagW, 58, 12);
-    ctx.fill();
+    neonBox(ctx, pad, y, tagW, 58, 6, C.magenta);
     ctx.fillStyle = "#fff";
     ctx.textBaseline = "middle";
     ctx.fillText(d.tag, pad + 26, y + 30);
@@ -699,7 +796,7 @@
       ctx.fillStyle = C.lime;
       roundRect(ctx, pad + tagW + 14, y, bw, 58, 12);
       ctx.fill();
-      ctx.fillStyle = "#1d2600";
+      ctx.fillStyle = C.limeInk;
       ctx.fillText(d.multiplierBadge, pad + tagW + 34, y + 30);
     }
     y += 100;
@@ -710,9 +807,7 @@
 
     // 对阵块：原始分数
     y = 360;
-    ctx.fillStyle = C.purple;
-    roundRect(ctx, pad, y, inner, vsH, 28);
-    ctx.fill();
+    neonBox(ctx, pad, y, inner, vsH, 18, C.magenta, "rgba(255,43,214,0.16)");
     const av = 88;
     drawAvatar(ctx, people[0], 0, pad + 40, y + 40, av, true);
     drawAvatar(ctx, people[1], 1, W - pad - 40 - av, y + 40, av, true);
@@ -722,14 +817,14 @@
     ctx.fillStyle = C.lime;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = font(34, 900);
-    ctx.fillText("VS", W / 2, y + 40 + av / 2);
+    ctx.font = disp(34, 900);
+    glowText(ctx, "VS", W / 2, y + 40 + av / 2, C.lime, 16);
     const cy = y + 238;
     const hi = (k) => (d.winner === k ? C.lime : "#ffffff");
     const vals = [cellText(d.cells[0]), cellText(d.cells[1])];
     ctx.font = font(132, 900);
     const gap = 44;
-    ctx.fillStyle = "#9d8fb0";
+    ctx.fillStyle = C.dim;
     ctx.fillText(":", W / 2, cy);
     ctx.textAlign = "right";
     ctx.fillStyle = hi(0);
@@ -740,7 +835,7 @@
     ctx.font = font(fitSize(ctx, vals[1], inner / 2 - 80, 132, 60, 900), 900);
     ctx.fillText(vals[1], W / 2 + gap, cy + 4);
     ctx.textAlign = "center";
-    ctx.fillStyle = d.winner == null ? "#cfc4dc" : C.lime;
+    ctx.fillStyle = d.winner == null ? "#a9aed6" : C.lime;
     ctx.font = font(28, 800);
     ctx.fillText(d.verdict, W / 2, y + vsH - 52);
 
@@ -749,13 +844,7 @@
     const cardW = (inner - 24) / 2;
     d.points.forEach((pt, i) => {
       const x = pad + i * (cardW + 24);
-      ctx.fillStyle = "#ffffff";
-      roundRect(ctx, x, y, cardW, cardH, 24);
-      ctx.fill();
-      ctx.strokeStyle = C.line;
-      ctx.lineWidth = 2;
-      roundRect(ctx, x + 1, y + 1, cardW - 2, cardH - 2, 24);
-      ctx.stroke();
+      neonBox(ctx, x, y, cardW, cardH, 14, i === 0 ? C.neon : C.magenta);
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillStyle = C.purple;
@@ -766,7 +855,7 @@
       ctx.textAlign = "center";
       ctx.fillStyle = C.muted;
       ctx.fillText(":", mid, y + 128);
-      const col = (k) => (pt.winner === k ? C.purple : "#b1a9bb");
+      const col = (k) => (pt.winner === k ? C.neon : C.dim);
       ctx.textAlign = "right";
       ctx.fillStyle = col(0);
       ctx.fillText(pt.values[0], mid - 24, y + 130);
@@ -798,10 +887,8 @@
     ctx.fillText(d.beforeLine, W - pad - 32, y + bandH / 2);
 
     const fy = H - 180;
+    neonBox(ctx, pad, fy, inner, 84, 8, C.lime, "rgba(212,255,58,0.14)");
     ctx.fillStyle = C.lime;
-    roundRect(ctx, pad, fy, inner, 84, 18);
-    ctx.fill();
-    ctx.fillStyle = "#1d2600";
     ctx.textAlign = "left";
     ctx.font = font(26, 800);
     ctx.fillText(d.projectTitle, pad + 30, fy + 43);
@@ -821,5 +908,5 @@
   }
 
   window.Poster = { drawScorePoster, drawBoardPoster, drawReportPoster, drawSubjectPoster, toJpeg, initial,
-    util: { W, C, FONT, font, fitSize, setSpacing, roundRect, drawAvatar, drawName, loadImages, ready } };
+    util: { W, C, FONT, font, mono, disp, cyberBg, neonBox, glowText, fitSize, setSpacing, roundRect, drawAvatar, drawName, loadImages, ready } };
 })();

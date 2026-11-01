@@ -5,13 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#05040d">
+<meta name="theme-color" content="#07060b">
 <title>学术军备竞赛（冷战版）</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Noto+Sans+SC:wght@500;900&display=swap">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<canvas id="metal" aria-hidden="true"></canvas>
+<div class="fx dim"></div><div class="fx vig"></div><div class="fx sweep"></div><div class="fx scan"></div>
+<div class="hud-frame" aria-hidden="true"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i></div>
+<div class="hud-line" aria-hidden="true">
+  <span class="t1"><span class="dot"></span>SYS://ACADEMIC-LEAGUE/VIEW</span>
+  <span class="t2" id="clock">T --:--:--</span>
+  <span class="t3" id="coord">X 0000 · Y 0000</span>
+  <span class="on">NEURAL LINK · ONLINE</span>
+</div>
 <header class="topbar">
   <a class="brand" href="#/home" title="回到首页">
     <div class="logo" aria-hidden="true"></div>
@@ -30,10 +42,12 @@
   </nav>
 </header>
 <main id="view" class="view"><p class="muted">正在加载…</p></main>
+<footer class="hud-foot"><span>© 2026 学术军备竞赛 · ALL SYSTEMS NOMINAL</span><a href="#/home">◂ HOME</a></footer>
 <div id="modal-root"></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <script>window.LEAGUE_READONLY = true;</script>
 <script src="poster.js"></script>
 <script src="app.js"></script>
+<script src="metal.js"></script>
 </body>
 </html>

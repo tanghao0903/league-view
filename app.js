@@ -171,6 +171,7 @@
   async function refreshState() {
     APP = await api("GET", "/state");
     $("#brand-title").textContent = APP.title;
+    $("#brand-title").dataset.text = APP.title;
     $("#brand-en").textContent = APP.stage_en;
     $("#mode-badge").hidden = !APP.demo;
     document.title = APP.title + (APP.demo ? " · 演示模式" : "");
@@ -193,6 +194,9 @@
   async function route() {
     const r = parseHash();
     $all("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.tab === r.page));
+    // 终端风标题编号：// 01 — 成绩录入
+    const secNo = $all("#tabs a[data-tab]").findIndex((a) => a.dataset.tab === r.page);
+    document.documentElement.style.setProperty("--sec", `"// ${String(Math.max(secNo, 0)).padStart(2, "0")} —"`);
     try {
       if (r.page === "home") {
         // 首页只放入口方块，不依赖成绩：服务或快照暂时读不到时也能显示
@@ -253,15 +257,22 @@
       ];
 
   function renderHome() {
-    const tiles = HOME_TILES.map((t) => `
+    const tiles = HOME_TILES.map((t, i) => `
       <a class="home-tile" href="${t.href || "#/" + t.key}">
+        <span class="home-id" aria-hidden="true">[ ${String(i + 1).padStart(3, "0")} ] · LIVE</span>
         <span class="home-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${ICON[t.key]}</svg></span>
         <span class="home-name">${esc(t.name)}</span>
         <span class="home-desc">${esc(t.desc)}</span>
+        <span class="bar" aria-hidden="true">${"<u class=\"on\"></u>".repeat(4)}<u></u></span>
+        <span class="home-open" aria-hidden="true">&gt; OPEN_</span>
       </a>`).join("");
     view.innerHTML = `
       <div class="home">
-        <h1 class="home-title">要去哪里？</h1>
+        <header class="home-head">
+          <div class="home-kicker">// 00 — DIRECTORY</div>
+          <h1 class="home-title">要去哪里？</h1>
+          <div class="home-cmd">&gt; ls ~/league &nbsp;<b>${HOME_TILES.length} items</b><span class="cursor"></span></div>
+        </header>
         <div class="home-grid">${tiles}</div>
       </div>`;
   }
